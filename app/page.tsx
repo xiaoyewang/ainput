@@ -16,7 +16,6 @@ export default function Home() {
   const [highlightedLineId, setHighlightedLineId] = useState<number | null>(null);
   const [revisionError, setRevisionError] = useState<string | null>(null);
 
-  // Called when Recorder delivers a transcription
   function handleTranscription(newLines: Line[], text: string) {
     setLines(newLines);
     setRawText(text);
@@ -24,7 +23,6 @@ export default function Home() {
     setPrevLines([]);
     setHighlightedLineId(null);
     setRevisionError(null);
-    // Save as version 1
     const v: VersionEntry = {
       version_id: crypto.randomUUID(),
       timestamp: Date.now(),
@@ -33,7 +31,6 @@ export default function Home() {
     setVersions([v]);
   }
 
-  // Called when RevisionInput submits an instruction
   async function handleRevision(instruction: string) {
     setRevisionError(null);
     const res = await fetch('/api/revise', {
@@ -51,11 +48,9 @@ export default function Home() {
     setPrevLines(JSON.parse(JSON.stringify(lines)));
     setLastRevision(data);
 
-    // Apply the revision to lines
     let updatedLines: Line[];
     if (data.edit_type === 'delete') {
       updatedLines = lines.filter(l => l.id !== data.target_line);
-      // Re-number
       updatedLines = updatedLines.map((l, i) => ({ ...l, id: i + 1 }));
     } else {
       updatedLines = lines.map(l =>
@@ -66,7 +61,6 @@ export default function Home() {
     setLines(updatedLines);
     setHighlightedLineId(data.target_line);
 
-    // Save version snapshot
     const v: VersionEntry = {
       version_id: crypto.randomUUID(),
       timestamp: Date.now(),
@@ -75,11 +69,20 @@ export default function Home() {
     setVersions(prev => [...prev, v]);
   }
 
+  function restoreVersion(v: VersionEntry) {
+    const restored = JSON.parse(JSON.stringify(v.lines));
+    setLines(restored);
+    setLastRevision(null);
+    setPrevLines([]);
+    setHighlightedLineId(null);
+    setRevisionError(null);
+  }
+
   return (
     <main className="container">
       <header>
         <h1>AINput</h1>
-        <p className="subtitle">AI-native structured voice input with real-time revision</p>
+        <p className="subtitle">AI-native structured voice input with iterative revision</p>
       </header>
 
       <section className="panel">
@@ -93,7 +96,11 @@ export default function Home() {
           </section>
 
           <section className="panel">
-            <RevisionInput disabled={lines.length === 0} onApply={handleRevision} />
+            <RevisionInput
+              disabled={lines.length === 0}
+              onApply={handleRevision}
+              lineCount={lines.length}
+            />
             {revisionError && <p className="error">{revisionError}</p>}
           </section>
 
@@ -113,6 +120,14 @@ export default function Home() {
               {versions.map((v, i) => (
                 <li key={v.version_id}>
                   v{i + 1} — {new Date(v.timestamp).toLocaleTimeString()} — {v.lines.length} lines
+                  {i < versions.length - 1 && (
+                    <button
+                      className="version-restore-btn"
+                      onClick={() => restoreVersion(v)}
+                    >
+                      restore
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
